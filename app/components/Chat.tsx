@@ -260,53 +260,51 @@ export default function Chat() {
             </div>
           )}
           <input {...getInputProps()} />
-          {chatHistory.map((msg, index) => (
-            <div key={index} className={`flex items-start mb-6 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          {chatHistory.map((msg, index) => {
+            const textParts = msg.parts.filter(part => part.text);
+            const attachmentParts = msg.parts.filter(part => part.image || part.document || part.audio);
+
+            return (
+              <div key={index} className={`flex items-start mb-6 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center text-gray-600 text-lg font-bold">
-                      {msg.role === 'user' ? 'U' : 'A'}
-                    </div>
-                    <div className={`px-4 py-3 rounded-2xl card-shadow ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-[var(--card-background)] text-[var(--foreground)]'}`}>
-                        {msg.parts.map((part, partIndex) => (
-                            <div key={partIndex}>
-                                {msg.role === 'user' && msg.parts.some(part => part.image || part.document || part.audio) && (
-                                    <div className="flex flex-wrap gap-2 mb-2">
-                                        {msg.parts.filter(part => part.image || part.document || part.audio).map((part, attachmentIndex) => (
-                                            <div key={attachmentIndex} className="flex items-center p-2 bg-white rounded-xl card-shadow text-sm text-gray-700">
-                                                {part.image && <img src={part.image} alt={part.fileName || "attached image"} className="h-8 w-8 object-cover rounded-lg mr-2"/>}
-                                                {part.document && <span className="h-5 w-5 mr-2 text-gray-500">{getFileIcon(part.fileName || '', part.document.split(';')[0].split(':')[1])}</span>}
-                                                {part.audio && <span className="h-5 w-5 mr-2 text-gray-500">{getFileIcon(part.fileName || '', part.audio.split(';')[0].split(':')[1])}</span>}
-                                                <span>{part.fileName || "Attached File"}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                {part.text && <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>}
-                                {msg.role !== 'user' && part.image && <img src={part.image} alt={part.fileName || "attached image"} className="mt-2 rounded-xl max-w-xs"/>}
-                                {msg.role !== 'user' && part.document && (
-                                    <div className="flex items-center mt-2">
-                                        <FiFileText className="h-5 w-5 mr-2 text-gray-500"/>
-                                        <p className="text-sm text-gray-500">{part.fileName || "Attached Document"}</p>
-                                    </div>
-                                )}
-                                {msg.role !== 'user' && part.audio && (
-                                    <div className="flex items-center mt-2">
-                                        <FiMic className="h-5 w-5 mr-2 text-gray-500"/>
-                                        <p className="text-sm text-gray-500">{part.fileName || "Voice Message"}</p>
-                                        <audio controls src={part.audio} className="ml-2"/>
-                                    </div>
-                                )}
-                            </div>
+                  <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center text-gray-600 text-lg font-bold">
+                    {msg.role === 'user' ? 'U' : 'A'}
+                  </div>
+
+                  {msg.role === 'user' && attachmentParts.length > 0 && (
+                    <div className={`px-4 py-3 rounded-2xl card-shadow bg-blue-500 text-white mb-2`}>
+                      <div className="flex flex-wrap gap-2">
+                        {attachmentParts.map((part, attachmentIndex) => (
+                          <div key={attachmentIndex} className="flex items-center p-2 bg-white rounded-xl card-shadow text-sm text-gray-700">
+                            {part.image && <img src={part.image} alt={part.fileName || "attached image"} className="h-8 w-8 object-cover rounded-lg mr-2"/>}
+                            {part.document && <span className="h-5 w-5 mr-2 text-gray-500">{getFileIcon(part.fileName || '', part.document.split(';')[0].split(':')[1])}</span>}
+                            {part.audio && <span className="h-5 w-5 mr-2 text-gray-500">{getFileIcon(part.fileName || '', part.audio.split(';')[0].split(':')[1])}</span>}
+                            <span>{part.fileName || "Attached File"}</span>
+                          </div>
                         ))}
+                      </div>
                     </div>
-                    {msg.role === 'user' && !editingMessageId && (
-                        <button onClick={(e) => { e.stopPropagation(); handleEditMessage(msg._id!, msg.parts[0].text || ''); }} className="self-center text-gray-500 hover:text-gray-400">
-                        <FiEdit />
-                        </button>
-                    )}
+                  )}
+
+                  {textParts.length > 0 && (
+                    <div className={`px-4 py-3 rounded-2xl card-shadow ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-[var(--card-background)] text-[var(--foreground)]'}`}>
+                      {textParts.map((part, partIndex) => (
+                        <div key={partIndex}>
+                          {part.text && <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {msg.role === 'user' && !editingMessageId && (
+                    <button onClick={(e) => { e.stopPropagation(); handleEditMessage(msg._id!, textParts[0]?.text || ''); }} className="self-center text-gray-500 hover:text-gray-400">
+                      <FiEdit />
+                    </button>
+                  )}
                 </div>
-            </div>
-          ))}
+              </div>
+            );
+          })}
           <div ref={messagesEndRef} />
         </main>
         <footer className="p-6 bg-[var(--card-background)] border-t border-[var(--border-color)] rounded-2xl card-shadow mx-4 mb-4">
