@@ -2,10 +2,17 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { FiSend, FiTrash2, FiEdit, FiPaperclip, FiImage, FiMenu, FiX, FiMic, FiStopCircle, FiFileText } from 'react-icons/fi';
+import { FiSend, FiTrash2, FiEdit, FiPaperclip, FiImage, FiMic, FiStopCircle, FiFileText, FiFile, FiX } from 'react-icons/fi';
 import { useDropzone } from 'react-dropzone';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+const getFileIcon = (fileName: string, fileType: string) => {
+  if (fileType.startsWith('image/')) return <FiImage />;
+  if (fileType.startsWith('audio/')) return <FiMic />;
+  if (fileType.includes('text') || fileName.endsWith('.txt') || fileName.endsWith('.md')) return <FiFileText />;
+  return <FiFile />;
+};
 
 interface Message {
   _id?: string;
@@ -218,45 +225,74 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
-      <div className={`bg-gray-800 border-r border-gray-700 flex flex-col transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-0'}`}>
-        <div className="p-4 border-b border-gray-700 flex justify-between items-center">
-          <h1 className={`text-2xl font-bold ${!sidebarOpen && 'hidden'}`}>Gemini Chat</h1>
-        </div>
-        <div className={`flex-grow p-4 ${!sidebarOpen && 'hidden'}`}>
-          <button onClick={handleClearChat} className="w-full flex items-center justify-center p-2 bg-red-600 text-white rounded hover:bg-red-700">
-            <FiTrash2 className="mr-2" /> Clear Chat
-          </button>
-        </div>
-      </div>
-      <div className="flex-1 flex flex-col">
-        <header className="p-4 border-b border-gray-700 flex items-center bg-gray-800">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-full hover:bg-gray-700">
-                {sidebarOpen ? <FiX /> : <FiMenu />}
+    <div className="relative flex h-screen text-[var(--foreground)]">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col transition-all duration-300">
+        <header className="relative p-4 border-b border-[var(--border-color)] flex items-center bg-[var(--card-background)] rounded-2xl card-shadow mx-4 mt-4">
+            <h2 className="text-xl font-semibold text-gray-800">New Chat</h2>
+            <button onClick={handleClearChat} className="absolute top-4 right-4 p-2 bg-gray-100 text-red-600 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                <FiTrash2 /> Clear Chat
             </button>
-            <h2 className="text-xl font-semibold ml-4">Conversation</h2>
         </header>
-        <main {...getRootProps()} className="flex-grow p-6 overflow-y-auto bg-gray-900">
+        <main {...getRootProps()} className="flex-grow p-6 overflow-y-auto bg-[var(--background)] relative">
+          {chatHistory.length === 0 && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
+              <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center mb-4">
+                {/* Placeholder for user avatar */}
+                <span className="text-5xl text-gray-600">👋</span>
+              </div>
+              <h1 className="text-4xl font-bold text-gray-800 mb-2">Hi!</h1>
+              <p className="text-lg text-gray-600 mb-8">How can I help you?</p>
+              <div className="grid grid-cols-2 gap-4 max-w-xl w-full">
+                <div className="bg-[var(--card-background)] p-4 rounded-xl card-shadow text-left text-gray-700 hover:bg-gray-50 transition-colors duration-200 cursor-pointer">
+                  <p className="font-semibold">Write a to-do list for a personal project or task</p>
+                </div>
+                <div className="bg-[var(--card-background)] p-4 rounded-xl card-shadow text-left text-gray-700 hover:bg-gray-50 transition-colors duration-200 cursor-pointer">
+                  <p className="font-semibold">Generate an email to reply to a job offer</p>
+                </div>
+                <div className="bg-[var(--card-background)] p-4 rounded-xl card-shadow text-left text-gray-700 hover:bg-gray-50 transition-colors duration-200 cursor-pointer">
+                  <p className="font-semibold">Summarise this article or text message in one paragraph</p>
+                </div>
+                <div className="bg-[var(--card-background)] p-4 rounded-xl card-shadow text-left text-gray-700 hover:bg-gray-50 transition-colors duration-200 cursor-pointer">
+                  <p className="font-semibold">How does AI work in a technical capacity</p>
+                </div>
+              </div>
+            </div>
+          )}
           <input {...getInputProps()} />
           {chatHistory.map((msg, index) => (
             <div key={index} className={`flex items-start mb-6 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className="w-10 h-10 rounded-full bg-gray-700"></div>
-                    <div className={`px-4 py-3 rounded-lg shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'}`}>
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center text-gray-600 text-lg font-bold">
+                      {msg.role === 'user' ? 'U' : 'A'}
+                    </div>
+                    <div className={`px-4 py-3 rounded-2xl card-shadow ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-[var(--card-background)] text-[var(--foreground)]'}`}>
                         {msg.parts.map((part, partIndex) => (
                             <div key={partIndex}>
-                                {part.text && <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>}
-                                {part.image && <img src={part.image} alt={part.fileName || "attached image"} className="mt-2 rounded-lg max-w-xs"/>}
-                                {part.document && (
-                                    <div className="flex items-center mt-2">
-                                        <FiFileText className="h-5 w-5 mr-2"/>
-                                        <p className="text-sm text-gray-400">{part.fileName || "Attached Document"}</p>
+                                {msg.role === 'user' && msg.parts.some(part => part.image || part.document || part.audio) && (
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {msg.parts.filter(part => part.image || part.document || part.audio).map((part, attachmentIndex) => (
+                                            <div key={attachmentIndex} className="flex items-center p-2 bg-white rounded-xl card-shadow text-sm text-gray-700">
+                                                {part.image && <img src={part.image} alt={part.fileName || "attached image"} className="h-8 w-8 object-cover rounded-lg mr-2"/>}
+                                                {part.document && <span className="h-5 w-5 mr-2 text-gray-500">{getFileIcon(part.fileName || '', part.document.split(';')[0].split(':')[1])}</span>}
+                                                {part.audio && <span className="h-5 w-5 mr-2 text-gray-500">{getFileIcon(part.fileName || '', part.audio.split(';')[0].split(':')[1])}</span>}
+                                                <span>{part.fileName || "Attached File"}</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
-                                {part.audio && (
+                                {part.text && <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>}
+                                {msg.role !== 'user' && part.image && <img src={part.image} alt={part.fileName || "attached image"} className="mt-2 rounded-xl max-w-xs"/>}
+                                {msg.role !== 'user' && part.document && (
                                     <div className="flex items-center mt-2">
-                                        <FiMic className="h-5 w-5 mr-2"/>
-                                        <p className="text-sm text-gray-400">{part.fileName || "Voice Message"}</p>
+                                        <FiFileText className="h-5 w-5 mr-2 text-gray-500"/>
+                                        <p className="text-sm text-gray-500">{part.fileName || "Attached Document"}</p>
+                                    </div>
+                                )}
+                                {msg.role !== 'user' && part.audio && (
+                                    <div className="flex items-center mt-2">
+                                        <FiMic className="h-5 w-5 mr-2 text-gray-500"/>
+                                        <p className="text-sm text-gray-500">{part.fileName || "Voice Message"}</p>
                                         <audio controls src={part.audio} className="ml-2"/>
                                     </div>
                                 )}
@@ -273,20 +309,18 @@ export default function Chat() {
           ))}
           <div ref={messagesEndRef} />
         </main>
-        <footer className="p-6 bg-gray-800 border-t border-gray-700">
+        <footer className="p-6 bg-[var(--card-background)] border-t border-[var(--border-color)] rounded-2xl card-shadow mx-4 mb-4">
           {attachedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4 p-2 border border-gray-700 rounded-lg bg-gray-700">
+            <div className="flex flex-wrap gap-2 mb-4 p-2 border border-[var(--border-color)] rounded-xl bg-gray-50">
               {attachedFiles.map((file, index) => (
-                <div key={index} className="relative flex items-center p-2 bg-gray-600 rounded-md text-sm">
+                <div key={index} className="relative flex items-center p-2 bg-white rounded-xl card-shadow text-sm text-gray-700">
                   {file.fileType.startsWith('image/') ? (
-                    <img src={file.fileData} alt="preview" className="h-10 w-10 object-cover rounded mr-2"/>
-                  ) : file.fileType.startsWith('audio/') ? (
-                    <FiMic className="h-5 w-5 mr-2"/>
+                    <img src={file.fileData} alt="preview" className="h-10 w-10 object-cover rounded-lg mr-2"/>
                   ) : (
-                    <FiFileText className="h-5 w-5 mr-2"/>
+                    <span className="h-5 w-5 mr-2 text-gray-500">{getFileIcon(file.fileName, file.fileType)}</span>
                   )}
                   <span>{file.fileName}</span>
-                  <button onClick={() => removeAttachedFile(index)} className="ml-2 text-red-400 hover:text-red-300">
+                  <button onClick={() => removeAttachedFile(index)} className="ml-2 text-red-400 hover:text-red-500 transition-colors duration-200">
                     <FiX size={14}/>
                   </button>
                 </div>
@@ -294,16 +328,16 @@ export default function Chat() {
             </div>
           )}
           <form onSubmit={handleSendMessage} className="flex items-center">
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-gray-500 hover:text-gray-400 rounded-full hover:bg-gray-700">
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-gray-500 hover:bg-gray-100 rounded-full transition-colors duration-200">
               <FiPaperclip />
             </button>
             <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
             {!isRecording ? (
-              <button type="button" onClick={startRecording} className="p-3 text-gray-500 hover:text-gray-400 rounded-full hover:bg-gray-700">
+              <button type="button" onClick={startRecording} className="p-3 text-gray-500 hover:bg-gray-100 rounded-full transition-colors duration-200">
                 <FiMic />
               </button>
             ) : (
-              <button type="button" onClick={stopRecording} className="p-3 text-red-500 hover:text-red-400 rounded-full hover:bg-gray-700">
+              <button type="button" onClick={stopRecording} className="p-3 text-red-500 hover:bg-red-100 rounded-full transition-colors duration-200">
                 <FiStopCircle />
               </button>
             )}
@@ -311,10 +345,10 @@ export default function Chat() {
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="flex-grow p-3 border border-gray-600 rounded-full mx-4 bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Type a message..."
+              className="flex-grow p-3 border border-[var(--border-color)] rounded-full mx-4 bg-gray-50 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="Ask me anything..."
             />
-            <button type="submit" className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button type="submit" className="p-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-colors duration-200">
               <FiSend />
             </button>
           </form>
