@@ -2,13 +2,13 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { FiSend, FiTrash2, FiEdit, FiPaperclip, FiImage, FiMenu, FiX, FiMic, FiStopCircle } from 'react-icons/fi';
+import { FiSend, FiTrash2, FiEdit, FiPaperclip, FiImage, FiMenu, FiX, FiMic, FiStopCircle, FiFileText } from 'react-icons/fi';
 import { useDropzone } from 'react-dropzone';
 
 interface Message {
   _id?: string;
   role: string;
-  parts: { text?: string; image?: string; document?: string; audio?: string }[];
+  parts: { text?: string; image?: string; document?: string; audio?: string; fileName?: string; }[];
   createdAt?: Date;
 }
 
@@ -19,6 +19,7 @@ export default function Chat() {
   const [editedMessage, setEditedMessage] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<{ fileData: string; fileType: string; fileName: string }[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
@@ -41,6 +42,14 @@ export default function Chat() {
     scrollToBottom();
   }, [chatHistory]);
 
+  const addAttachedFile = useCallback((fileData: string, fileType: string, fileName: string) => {
+    setAttachedFiles(prev => [...prev, { fileData, fileType, fileName }]);
+  }, []);
+
+  const removeAttachedFile = useCallback((index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
   const onDrop = useCallback((acceptedFiles: File[]) => {
     acceptedFiles.forEach((file) => {
       const reader = new FileReader();
@@ -48,12 +57,11 @@ export default function Chat() {
       reader.onabort = () => console.log('file reading was aborted');
       reader.onerror = () => console.log('file reading has failed');
       reader.onload = () => {
-        const base64File = reader.result;
-        handleSendMessage(new Event('submit') as any, base64File as string, file.type);
+        addAttachedFile(reader.result as string, file.type, file.name);
       };
       reader.readAsDataURL(file);
     });
-  }, []);
+  }, [addAttachedFile]);
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop });
 
@@ -62,39 +70,39 @@ export default function Chat() {
     if (file) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const base64File = e.target?.result as string;
-        handleSendMessage(new Event('submit') as any, base64File, file.type);
+        addAttachedFile(e.target?.result as string, file.type, file.name);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>, fileData?: string, fileType?: string) => {
+  const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!message.trim() && !fileData) return;
+    if (!message.trim() && attachedFiles.length === 0) return;
 
-    const userParts: { text?: string; image?: string; document?: string; audio?: string }[] = [];
+    const userParts: { text?: string; image?: string; document?: string; audio?: string; fileName?: string }[] = [];
     if (message.trim()) {
       userParts.push({ text: message });
     }
-    if (fileData) {
-      if (fileType?.startsWith('image/')) {
-        userParts.push({ image: fileData });
-      } else if (fileType?.startsWith('audio/')) {
-        userParts.push({ audio: fileData });
+    attachedFiles.forEach(file => {
+      if (file.fileType.startsWith('image/')) {
+        userParts.push({ image: file.fileData, fileName: file.fileName });
+      } else if (file.fileType.startsWith('audio/')) {
+        userParts.push({ audio: file.fileData, fileName: file.fileName });
       } else {
-        userParts.push({ document: fileData });
+        userParts.push({ document: file.fileData, fileName: file.fileName });
       }
-    }
+    });
 
     const userMessage: Message = { role: 'user', parts: userParts };
     setChatHistory(prev => [...prev, userMessage]);
     setMessage('');
+    setAttachedFiles([]); // Clear attached files after sending
 
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, fileData, fileType }),
+      body: JSON.stringify({ message, attachedFiles }),
     });
 
     const reader = res.body?.getReader();
@@ -103,7 +111,6 @@ export default function Chat() {
     let receivedText = '';
     const decoder = new TextDecoder();
 
-    // Optimistically add a placeholder for the model's response
     const modelPlaceholder: Message = { role: 'model', parts: [{ text: '' }] };
     setChatHistory(prev => [...prev.slice(0, -1), userMessage, modelPlaceholder]);
 
@@ -111,7 +118,6 @@ export default function Chat() {
       const { done, value } = await reader.read();
       if (done) break;
       receivedText += decoder.decode(value);
-      // Update the last message in chatHistory with the streamed content
       setChatHistory(prev => {
         const newHistory = [...prev];
         newHistory[newHistory.length - 1] = { ...modelPlaceholder, parts: [{ text: receivedText }] };
@@ -119,7 +125,6 @@ export default function Chat() {
       });
     }
 
-    // Update the database with the full response
     await fetch('/api/chat/save-response', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -156,20 +161,19 @@ export default function Chat() {
     const items = event.clipboardData?.items;
     if (items) {
       for (const item of items) {
-        if (item.type.indexOf('image') !== -1) {
+        if (item.type.indexOf('image') !== -1 || item.type.indexOf('application/') !== -1 || item.type.indexOf('audio/') !== -1) {
           const blob = item.getAsFile();
           if (blob) {
             const reader = new FileReader();
             reader.onload = (e) => {
-              const image = e.target?.result as string;
-              handleSendMessage(new Event('submit') as any, image, item.type);
+              addAttachedFile(e.target?.result as string, item.type, 'pasted_file'); // Generic name for pasted files
             };
             reader.readAsDataURL(blob);
           }
         }
       }
     }
-  }, [handleSendMessage]);
+  }, [addAttachedFile]);
 
   useEffect(() => {
     window.addEventListener('paste', handlePaste);
@@ -192,8 +196,7 @@ export default function Chat() {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const reader = new FileReader();
         reader.onload = (e) => {
-          const audioData = e.target?.result as string;
-          handleSendMessage(new Event('submit') as any, audioData, 'audio/webm');
+          addAttachedFile(e.target?.result as string, 'audio/webm', 'voice_message.webm');
         };
         reader.readAsDataURL(audioBlob);
       };
@@ -238,24 +241,28 @@ export default function Chat() {
                 <div className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     <div className="w-10 h-10 rounded-full bg-gray-700"></div>
                     <div className={`px-4 py-3 rounded-lg shadow-md ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'}`}>
-                        {editingMessageId === msg._id ? (
-                        <input 
-                            type="text"
-                            value={editedMessage}
-                            onChange={(e) => setEditedMessage(e.target.value)}
-                            onBlur={() => handleUpdateMessage(msg._id!)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleUpdateMessage(msg._id!)}
-                            className="bg-transparent text-white p-0 m-0 border-0 focus:ring-0"
-                        />
-                        ) : (
-                        <p>{msg.parts[0].text}</p>
-                        )}
-                        {msg.parts[0].image && <img src={msg.parts[0].image} alt="pasted content" className="mt-2 rounded-lg"/>}
-                        {msg.parts[0].document && <p className="text-sm text-gray-400">Document attached</p>}
-                        {msg.parts[0].audio && <audio controls src={msg.parts[0].audio} className="mt-2"/>}
+                        {msg.parts.map((part, partIndex) => (
+                            <div key={partIndex}>
+                                {part.text && <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>}
+                                {part.image && <img src={part.image} alt={part.fileName || "attached image"} className="mt-2 rounded-lg max-w-xs"/>}
+                                {part.document && (
+                                    <div className="flex items-center mt-2">
+                                        <FiFileText className="h-5 w-5 mr-2"/>
+                                        <p className="text-sm text-gray-400">{part.fileName || "Attached Document"}</p>
+                                    </div>
+                                )}
+                                {part.audio && (
+                                    <div className="flex items-center mt-2">
+                                        <FiMic className="h-5 w-5 mr-2"/>
+                                        <p className="text-sm text-gray-400">{part.fileName || "Voice Message"}</p>
+                                        <audio controls src={part.audio} className="ml-2"/>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
                     {msg.role === 'user' && !editingMessageId && (
-                        <button onClick={(e) => { e.stopPropagation(); handleEditMessage(msg._id!, msg.parts[0].text); }} className="self-center text-gray-500 hover:text-gray-400">
+                        <button onClick={(e) => { e.stopPropagation(); handleEditMessage(msg._id!, msg.parts[0].text || ''); }} className="self-center text-gray-500 hover:text-gray-400">
                         <FiEdit />
                         </button>
                     )}
@@ -265,10 +272,26 @@ export default function Chat() {
           <div ref={messagesEndRef} />
         </main>
         <footer className="p-6 bg-gray-800 border-t border-gray-700">
-          <form onSubmit={(e) => handleSendMessage(e)} className="flex items-center">
-            <button type="button" className="p-3 text-gray-500 hover:text-gray-400 rounded-full hover:bg-gray-700">
-              <FiImage />
-            </button>
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4 p-2 border border-gray-700 rounded-lg bg-gray-700">
+              {attachedFiles.map((file, index) => (
+                <div key={index} className="relative flex items-center p-2 bg-gray-600 rounded-md text-sm">
+                  {file.fileType.startsWith('image/') ? (
+                    <img src={file.fileData} alt="preview" className="h-10 w-10 object-cover rounded mr-2"/>
+                  ) : file.fileType.startsWith('audio/') ? (
+                    <FiMic className="h-5 w-5 mr-2"/>
+                  ) : (
+                    <FiFileText className="h-5 w-5 mr-2"/>
+                  )}
+                  <span>{file.fileName}</span>
+                  <button onClick={() => removeAttachedFile(index)} className="ml-2 text-red-400 hover:text-red-300">
+                    <FiX size={14}/>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <form onSubmit={handleSendMessage} className="flex items-center">
             <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-gray-500 hover:text-gray-400 rounded-full hover:bg-gray-700">
               <FiPaperclip />
             </button>

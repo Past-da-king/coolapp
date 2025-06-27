@@ -22,9 +22,9 @@ async function fileToGenerativePart(dataUrl: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, fileData } = await req.json();
+    const { message, attachedFiles } = await req.json();
 
-    if (!message && !fileData) {
+    if (!message && (!attachedFiles || attachedFiles.length === 0)) {
       return NextResponse.json({ error: 'Message or file is required' }, { status: 400 });
     }
 
@@ -55,23 +55,24 @@ export async function POST(req: NextRequest) {
     if (message) {
         userParts.push({ text: message });
     }
-    if (fileData) {
-        const generativePart = await fileToGenerativePart(fileData);
-        userParts.push(generativePart);
+    if (attachedFiles && attachedFiles.length > 0) {
+        for (const file of attachedFiles) {
+            const generativePart = await fileToGenerativePart(file.fileData);
+            userParts.push(generativePart);
+        }
     }
 
     const contents: Content[] = [...history, { role: 'user', parts: userParts }];
 
-    const systemInstruction: Content = {
-        role: 'system',
-        parts: [{
+    const config = {
+        systemInstruction: [{
             text: "You are Thabo Shoba, a highly intelligent and empathetic AI assistant. You are designed to be incredibly helpful, understanding, and always strive to provide the best possible support. You have a warm, human-like demeanor and are always apologetic if you make a mistake or if there's any misunderstanding. You value clear communication and are patient in your responses. Your goal is to make the user's experience as smooth and pleasant as possible, always sounding natural and approachable."
         }]
     };
 
     const stream = await genAI.models.generateContentStream({
         model: 'gemini-2.5-flash-lite-preview-06-17',
-        systemInstruction: systemInstruction,
+        config: config,
         contents: contents
     });
 
