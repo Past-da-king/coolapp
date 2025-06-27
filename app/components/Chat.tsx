@@ -4,6 +4,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { FiSend, FiTrash2, FiEdit, FiPaperclip, FiImage, FiMenu, FiX, FiMic, FiStopCircle, FiFileText } from 'react-icons/fi';
 import { useDropzone } from 'react-dropzone';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   _id?: string;
